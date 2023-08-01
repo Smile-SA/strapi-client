@@ -24,7 +24,7 @@ const strapiClient = new StrapiClient('http://127.0.0.1:1337', 'token', 'admin_t
 ```
 
 - `'token'` is an API token that you must create in Strapi. The token must have enough access (e.g.: "Full access") to be able to create the required content.
-- `'admin_token'` is optional (for creating media folders or moving media in the Media Library) and must be a JWT token (check in your browser local storage after authenticating to Strapi admin). The user associated to that JWT token must have enough rights to manage the Media Library.
+- `'admin_token'` is optional (for creating media folders and moving media in the Media Library and for publisher plugins) and must be a JWT token (check in your browser local storage after authenticating to Strapi admin). The user associated to that JWT token must have enough rights to manage the Media Library.
 
 ### Use the API
 
@@ -33,7 +33,7 @@ Examples below are based on [FoodAdvisor](https://github.com/strapi/foodadvisor)
 #### Create an entry
 
 ```javascript
-await strapiClient.createEntry('articles', {
+const creationResponse = await strapiClient.createEntry('articles', {
     title: '5 Famous Restaurants You Have to Visit in Paris',
     ckeditor_content: `<div class="entry-content">
 <h3>As one of the top food destinations in the world, there’s no shortage of famous restaurants in Paris.</h3>
@@ -49,11 +49,15 @@ const mediaCreationResponse = await strapiClient.addMediaAsset('https://assets2.
 
 #### Create a media folder
 
+Requires `adminToken`.
+
 ```javascript
 const mediaFolderCreationResponse = await strapiClient.createMediaFolder('Famous restaurants');
 ```
 
 #### Move media to a folder
+
+Requires `adminToken`.
 
 ```javascript
 await strapiClient.moveMedia(mediaFolderCreationResponse.data.id, [mediaCreationResponse[0].id]);
@@ -66,4 +70,34 @@ await strapiClient.updateEntry('articles', creationResponse.data.id, {
   publicationState: 'In review',
   image: mediaCreationResponse[0].id
 });
+```
+
+#### Set a publish / unpublish date
+
+Requires:
+- `adminToken`
+- one of the following plugins installed:
+  - [publisher](https://market.strapi.io/plugins/strapi-plugin-publisher)
+  - [Scheduler](https://market.strapi.io/plugins/@webbio-strapi-plugin-scheduler)
+
+You first need to tell the Strapi client which plugin you're using with:
+
+```javascript
+strapiClient.configureScheduler('strapi-plugin-publisher');
+// Or
+strapiClient.configureScheduler('@webbio-strapi-plugin-scheduler');
+```
+
+Then, set a publish date with:
+
+```javascript
+const in10Days = new Date(new Date().setDate(new Date().getDate() + 10));
+await strapiClient.addPublishDate('article', creationResponse.data.id, in10Days);
+```
+
+and an unpublish date with:
+
+```javascript
+const in30Days = new Date(new Date().setDate(new Date().getDate() + 30));
+await strapiClient.addUnpublishDate('article', creationResponse.data.id, in30Days);
 ```

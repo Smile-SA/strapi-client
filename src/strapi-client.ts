@@ -40,9 +40,14 @@ export interface MediaFolderCreation {
 
 export class StrapiClient {
   private readonly apiBaseUrl;
+  private schedulerPlugin?: "@webbio-strapi-plugin-scheduler" | "strapi-plugin-publisher";
 
   constructor(private strapiBaseUrl: string, private token: string, private adminToken?: string) {
     this.apiBaseUrl = path.join(strapiBaseUrl, 'api');
+  }
+
+  configureScheduler(plugin: '@webbio-strapi-plugin-scheduler' | 'strapi-plugin-publisher') {
+    this.schedulerPlugin = plugin;
   }
 
   async createEntry<T>(apiId: string, data: T): Promise<JSONResponse> {
@@ -73,8 +78,8 @@ export class StrapiClient {
 
   async addMediaAsset(assetPathOrUrl: string, alt?: string, caption?: string): Promise<FileUploadResponse[]> {
     const blob = /^http(s)?:\/\//.test(assetPathOrUrl)
-        ? await (await fetch(assetPathOrUrl)).blob()
-        : blobFromSync(assetPathOrUrl, mime.lookup(assetPathOrUrl) as string);
+      ? await (await fetch(assetPathOrUrl)).blob()
+      : blobFromSync(assetPathOrUrl, mime.lookup(assetPathOrUrl) as string);
     const form = new FormData();
     form.append('files', blob, basename(assetPathOrUrl));
     form.append('fileInfo', JSON.stringify({
@@ -117,6 +122,47 @@ export class StrapiClient {
         destinationFolderId: folderId,
         fileIds: mediaIds
       })
+    });
+  }
+
+  async addPublishDate(contentType: string, id: number, date: Date): Promise<void> {
+    return this._addPublisherDate(true, contentType, id, date);
+  }
+
+  async addUnpublishDate(contentType: string, id: number, date: Date): Promise<void> {
+    return this._addPublisherDate(false, contentType, id, date);
+  }
+
+  private async _addPublisherDate(publish: boolean, contentType: string, id: number, date: Date): Promise<void> {
+    if (!this.schedulerPlugin) throw new Error('You must specify a scheduler plugin in configureScheduler()');
+    if (!this.adminToken) throw new Error('You must specify an admin token for adding a (un)publish date');
+    const body = {
+      '@webbio-strapi-plugin-scheduler': {
+        contentId: id,
+        uid: `api::${contentType}.${contentType}`,
+        scheduledDatetime: date,
+        scheduleType: publish ? 'schedule' : 'depublish',
+      },
+      'strapi-plugin-publisher': {
+        data: {
+          entityId: id,
+          entitySlug: `api::${contentType}.${contentType}`,
+          executeAt: date,
+          mode: publish ? 'publish' : 'unpublish',
+        }
+      }
+    }[this.schedulerPlugin];
+    const urlPath = {
+      '@webbio-strapi-plugin-scheduler': 'scheduler/create',
+      'strapi-plugin-publisher': 'publisher/actions'
+    }[this.schedulerPlugin];
+    await fetch(`${this.strapiBaseUrl}/${urlPath}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.adminToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body)
     });
   }
 }

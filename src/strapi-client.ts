@@ -7,7 +7,7 @@ import {blobFromSync, FormData} from 'node-fetch';
 
 export interface JSONResponse {
   status?: number,
-  data: { id: number },
+  data: { documentId: number },
   error?: { status: number }
 }
 
